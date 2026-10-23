@@ -1,0 +1,36 @@
+#!/bin/sh
+# nvme-power-tune: AC -> NVMe APST off + "performance" profile;
+#                  battery -> restore the kernel's APST table + "balanced".
+# Usage: nvme-power-tune [ac|battery]   (no argument = detect from power supply)
+DEV=/dev/nvme0
+NVME=/usr/sbin/nvme
+STATE=/run/nvme-power-tune
+SWITCH_PROFILE=1   # set to 0 to leave power-profiles-daemon alone
+
+mkdir -p "$STATE"
+
+mode=${1:-}
+if [ -z "$mode" ]; then
+    mode=battery
+    for s in /sys/class/power_supply/*; do
+        [ "$(cat "$s/type" 2>/dev/null)" = Mains ] && [ "$(cat "$s/online" 2>/dev/null)" = 1 ] && mode=ac
+    done
+fi
+
+# Whenever APST is enabled (boot, resume, battery), remember the kernel's table.
+if $NVME get-feature "$DEV" -f 0x0c 2>/dev/null | grep -q 'Current value:0x0*1$'; then
+    $NVME get-feature "$DEV" -f 0x0c -b > "$STATE/apst.bin" 2>/dev/null
+fi
+
+case "$mode" in
+ac)
+    $NVME set-feature "$DEV" --feature-id=0x0c --value=0x0 --data=/dev/zero --data-len=256 >/dev/null </dev/null
+    [ "$SWITCH_PROFILE" = 1 ] && command -v powerprofilesctl >/dev/null && powerprofilesctl set performance
+    ;;
+battery)
+    [ -s "$STATE/apst.bin" ] && $NVME set-feature "$DEV" --feature-id=0x0c --value=0x1 \
+        --data="$STATE/apst.bin" --data-len=256 >/dev/null </dev/null
+    [ "$SWITCH_PROFILE" = 1 ] && command -v powerprofilesctl >/dev/null && powerprofilesctl set balanced
+    ;;
+esac
+logger -t nvme-power-tune "mode=$mode apst=$($NVME get-feature "$DEV" -f 0x0c 2>/dev/null | sed -n 's/.*Current value:\([0-9a-fx]*\).*/\1/p')"

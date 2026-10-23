@@ -1,0 +1,10 @@
+[Unit]
+Description=NVMe APST / power profile by AC state
+After=power-profiles-daemon.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/nvme-power-tune
+
+[Install]
+WantedBy=multi-user.target

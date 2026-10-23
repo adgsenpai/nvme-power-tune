@@ -1,0 +1,4 @@
+#!/bin/sh
+# Re-apply after resume (the kernel may reprogram APST when the controller resets).
+[ "$1" = post ] && /usr/local/sbin/nvme-power-tune
+exit 0
