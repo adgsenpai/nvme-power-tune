@@ -1,0 +1,43 @@
+#!/bin/sh
+# cpu-power-tune: set the CPU package power limits (intel-rapl-mmio) by power state.
+#   AC            -> AC_PL1/AC_PL2      (fast compiles / CPU work)
+#   AC + gaming   -> GAME_PL1/GAME_PL2  (leaves the shared power budget to the GPU)
+#   battery       -> BAT_PL1/BAT_PL2    (stock)
+# Usage: cpu-power-tune [ac|battery|game-start|game-end]   (no argument = detect)
+AC_PL1=45; AC_PL2=65
+GAME_PL1=20; GAME_PL2=25
+BAT_PL1=20; BAT_PL2=25
+[ -r /etc/default/cpu-power-tune ] && . /etc/default/cpu-power-tune
+
+Z=/sys/class/powercap/intel-rapl-mmio:0
+STATE=/run/cpu-power-tune
+mkdir -p "$STATE"
+
+case "${1:-}" in
+game-start) touch "$STATE/game"; src= ;;
+game-end)   rm -f "$STATE/game"; src= ;;
+ac|battery) src=$1 ;;
+*)          src= ;;
+esac
+
+if [ -z "$src" ]; then
+    src=battery
+    for s in /sys/class/power_supply/*; do
+        [ "$(cat "$s/type" 2>/dev/null)" = Mains ] && [ "$(cat "$s/online" 2>/dev/null)" = 1 ] && src=ac
+    done
+fi
+
+if [ "$src" = battery ]; then
+    mode=battery; pl1=$BAT_PL1; pl2=$BAT_PL2
+elif [ -e "$STATE/game" ]; then
+    mode=game; pl1=$GAME_PL1; pl2=$GAME_PL2
+else
+    mode=ac; pl1=$AC_PL1; pl2=$AC_PL2
+fi
+
+[ -d "$Z" ] || { logger -t cpu-power-tune "no $Z, nothing to do"; exit 0; }
+# Write PL2 first when raising so PL1 never exceeds PL2.
+echo $((pl2 * 1000000)) > "$Z/constraint_1_power_limit_uw"
+echo $((pl1 * 1000000)) > "$Z/constraint_0_power_limit_uw"
+echo $((pl2 * 1000000)) > "$Z/constraint_1_power_limit_uw"
+logger -t cpu-power-tune "mode=$mode PL1=$(( $(cat "$Z/constraint_0_power_limit_uw") / 1000000 ))W PL2=$(( $(cat "$Z/constraint_1_power_limit_uw") / 1000000 ))W"

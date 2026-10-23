@@ -1,0 +1,4 @@
+#!/bin/sh
+# Re-apply power limits after resume (firmware may reset them).
+[ "$1" = post ] && /usr/local/sbin/cpu-power-tune
+exit 0

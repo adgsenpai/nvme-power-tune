@@ -1,0 +1,8 @@
+# Package power limits in watts for /usr/local/sbin/cpu-power-tune.
+# i7-13620H: 45 W base, 115 W max turbo. 55/80 measured 93 C on this chassis.
+AC_PL1=45
+AC_PL2=65
+GAME_PL1=20
+GAME_PL2=25
+BAT_PL1=20
+BAT_PL2=25

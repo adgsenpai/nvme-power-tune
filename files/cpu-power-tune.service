@@ -1,0 +1,10 @@
+[Unit]
+Description=CPU power limits by AC state
+After=thermald.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/cpu-power-tune
+
+[Install]
+WantedBy=multi-user.target
